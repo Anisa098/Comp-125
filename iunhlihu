@@ -1,0 +1,53 @@
+[BITS 16]            ; Set to 16-bit mode
+[ORG 0x7C00]         ; BIOS loads the MBR here
+
+boot:
+    ; Step 1: Print Welcome Message
+    mov si, welcome_msg
+    call putStr
+
+    ; Step 2: Load 50 sectors from disk to 0x7E00
+    mov ax, 0x07E0   ; Set ES to 0x07E0
+    mov es, ax
+    xor bx, bx       ; Offset in ES (0x7E00)
+
+    mov ah, 0x02     ; BIOS read sector function
+    mov al, 50       ; Number of sectors to read
+    mov ch, 0x00     ; Cylinder 0
+    mov cl, 0x02     ; Start reading from sector 2
+    mov dh, 0x00     ; Head 0
+    mov dl, 0x80     ; First hard disk
+    int 0x13         ; Call BIOS to read disk
+    jc read_fail     ; If carry flag is set, read failed
+
+    ; Step 3: Jump to 0x7E00
+    jmp 0x07E0:0000  ; Jump to the loaded code
+
+read_fail:
+    mov si, error_msg
+    call putStr
+    hlt
+
+; Function: Print a NULL-Terminated String
+putStr:
+    pusha           ; Save all registers
+.loop:
+    lodsb           ; Load byte at DS:SI into AL, increment SI
+    or al, al       ; Check if NULL terminator
+    jz .done        ; If NULL, end function
+    mov ah, 0x0E    ; BIOS print character function
+    mov bh, 0x00    ; Page number
+    mov bl, 0x07    ; Foreground color (gray)
+    int 0x10        ; Call BIOS
+    jmp .loop       ; Repeat for next character
+.done:
+    popa            ; Restore all registers
+    ret
+
+; Data
+welcome_msg db "MBR Loaded! Jumping to stage 2...", 0
+error_msg   db "Disk Read Error!", 0
+
+; Boot sector padding
+times 510-($-$$) db 0  ; Fill remaining bytes to 510
+dw 0xAA55             ; Boot signature
